@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MobilitiQ - Ride Request</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    /* base font and sizing */
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #fff; color: #000; }
+
+    /* main two-column layout */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 50px 40px 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: start;
+    }
+
+    .location { font-size: 14px; margin-bottom: 10px; color: #555; }
+    h1 { font-size: 48px; margin: 10px 0 18px; letter-spacing: -0.5px; }
+
+    /* pickup time pill and dropdown */
+    .pickup-wrap { position: relative; width: fit-content; margin-bottom: 18px; }
+    .pickup-pill {
+      background: #f2f2f2; border-radius: 999px; padding: 10px 14px;
+      display: inline-flex; align-items: center; gap: 10px; font-size: 14px;
+    }
+    .pickup-caret-btn {
+      border: none; background: transparent; cursor: pointer;
+      font-size: 12px; padding: 4px 8px; border-radius: 999px; line-height: 1;
+    }
+    .pickup-caret-btn:hover { background: #e9e9e9; }
+    .pickup-menu {
+      position: absolute; top: 46px; left: 0; min-width: 220px;
+      background: #fff; border: 1px solid #eee; border-radius: 12px;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.12);
+      padding: 6px; display: none; z-index: 50;
+    }
+    .pickup-menu.open { display: block; }
+    .pickup-item {
+      width: 100%; text-align: left; border: none; background: transparent;
+      padding: 10px; border-radius: 10px; cursor: pointer; font-size: 14px;
+    }
+    .pickup-item:hover { background: #f5f5f5; }
+
+    /* pickup and dropoff input boxes */
+    .input-box {
+      background: #f2f2f2; border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; display: flex; align-items: center; gap: 10px;
+      border: 2px solid transparent;
+    }
+    /* highlight active input */
+    .input-box.active { border-color: #000; }
+    .input-box input {
+      border: none; background: transparent; outline: none;
+      width: 100%; font-size: 15px;
+    }
+    .hint { font-size: 12px; color: #666; margin: 6px 0 14px; }
+
+    /* service selection buttons */
+    .section-title { font-size: 14px; font-weight: 700; margin: 16px 0 10px; }
+    .service-toggle { display: flex; gap: 10px; margin-bottom: 14px; }
+    .service-btn {
+      flex: 1; border: 1px solid #e6e6e6; background: #fff;
+      border-radius: 12px; padding: 12px; cursor: pointer; text-align: left;
+      transition: transform 120ms ease, background 120ms ease, border 120ms ease;
+    }
+    .service-btn:hover { background: #f7f7f7; transform: translateY(-1px); }
+    /* selected service style */
+    .service-btn.selected { border-color: #000; background: #f2f2f2; }
+    .service-name { font-weight: 700; font-size: 14px; }
+    .service-desc { font-size: 12px; color: #666; margin-top: 4px; }
+
+    /* submit button */
+    .submit-btn {
+      background: #000; color: #fff; border: none; border-radius: 10px;
+      padding: 14px 22px; font-size: 16px; cursor: pointer; margin-top: 10px;
+    }
+    .submit-btn:hover { background: #222; }
+
+    /* map container */
+    #map { border-radius: 20px; height: 420px; width: 100%; }
+    .map-footer { margin-top: 10px; font-size: 12px; color: #666; }
+
+    /* responsive layout */
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+      h1 { font-size: 38px; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <!-- left side form -->
+    <div>
+
+      <h1>Request a ride</h1>
+
+      <!-- pickup time selector -->
+      <div class="pickup-wrap" id="pickupWrap">
+        <div class="pickup-pill">
+          <span>🕒</span>
+          <span id="pickupLabel">Pickup now</span>
+          <button class="pickup-caret-btn" id="pickupCaretBtn" type="button">▾</button>
+        </div>
+
+        <div class="pickup-menu" id="pickupMenu">
+          <button class="pickup-item" data-value="now">Pickup now</button>
+          <button class="pickup-item" data-value="1">Pickup in 1 hour</button>
+          <button class="pickup-item" data-value="2">Pickup in 2 hours</button>
+          <button class="pickup-item" data-value="3">Pickup in 3 hours</button>
+          <button class="pickup-item" data-value="custom">Custom…</button>
+        </div>
+      </div>
+
+      <!-- pickup and dropoff inputs -->
+      <div class="input-box" id="pickupBox">
+        📍 <input id="pickupInput" placeholder="Pickup location (type or click map)" />
+      </div>
+
+      <div class="input-box" id="dropoffBox">
+        🏁 <input id="dropoffInput" placeholder="Dropoff location (type or click map)" />
+      </div>
+
+      <div class="hint">
+        Click pickup or dropoff, then click the map to set the location. You can also type to search.
+      </div>
+
+      <!-- service level selection -->
+      <div class="section-title">Level of Service</div>
+      <div class="service-toggle" id="serviceToggle">
+        <button class="service-btn selected" data-service="private" type="button">
+          <div class="service-name">Private Vehicle</div>
+          <div class="service-desc">No shared ride</div>
+        </button>
+        <button class="service-btn" data-service="shared" type="button">
+          <div class="service-name">Shared Vehicle</div>
+          <div class="service-desc">Ride with others</div>
+        </button>
+      </div>
+
+      <button class="submit-btn" id="seePricesBtn">See prices</button>
+    </div>
+
+    <!-- right side map -->
+    <div>
+      <div id="map"></div>
+      <div class="map-footer" id="mapFooter">
+        Pickup: not set • Dropoff: not set • Service: Private Vehicle
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+
+    // pickup time dropdown elements
+    const pickupWrap = document.getElementById("pickupWrap");
+    const pickupCaretBtn = document.getElementById("pickupCaretBtn");
+    const pickupMenu = document.getElementById("pickupMenu");
+    const pickupLabel = document.getElementById("pickupLabel");
+
+    // toggle dropdown open or closed
+    pickupCaretBtn.onclick = (e) => {
+      e.stopPropagation();
+      pickupMenu.classList.toggle("open");
+    };
+
+    // update label when user selects pickup time
+    pickupMenu.onclick = (e) => {
+      const btn = e.target.closest(".pickup-item");
+      if (!btn) return;
+      const v = btn.dataset.value;
+      pickupLabel.textContent = v === "now" ? "Pickup now" : v === "custom" ? "Pickup: Custom" : `Pickup in ${v} hour${v==="1"?"":"s"}`;
+      pickupMenu.classList.remove("open");
+    };
+
+    // close menu when clicking outside
+    document.addEventListener("click", () => pickupMenu.classList.remove("open"));
+
+    // input elements and footer
+    const pickupBox = document.getElementById("pickupBox");
+    const dropoffBox = document.getElementById("dropoffBox");
+    const pickupInput = document.getElementById("pickupInput");
+    const dropoffInput = document.getElementById("dropoffInput");
+    const mapFooter = document.getElementById("mapFooter");
+
+    // state variables for map and service selection
+    let armed = "pickup";
+    let service = "private";
+    let map, geocoder, pickupMarker, dropoffMarker;
+
+    // sets which field the next map click will fill
+    function setArmed(w) {
+      armed = w;
+      pickupBox.classList.toggle("active", w === "pickup");
+      dropoffBox.classList.toggle("active", w === "dropoff");
+    }
+    setArmed("pickup");
+
+    pickupBox.onclick = () => setArmed("pickup");
+    dropoffBox.onclick = () => setArmed("dropoff");
+
+    // updates summary footer text
+    function updateFooter() {
+      mapFooter.textContent =
+        `Pickup: ${pickupInput.value||"not set"} • Dropoff: ${dropoffInput.value||"not set"} • Service: ${service==="private"?"Private Vehicle":"Shared Vehicle"}`;
+    }
+
+    // creates or moves pickup/dropoff markers on the map
+    function setMarker(kind, pos) {
+      if (kind === "pickup") {
+        pickupMarker ??= new google.maps.Marker({ map, label: "P" });
+        pickupMarker.setPosition(pos);
+      } else {
+        dropoffMarker ??= new google.maps.Marker({ map, label: "D" });
+        dropoffMarker.setPosition(pos);
+      }
+      map.panTo(pos);
+    }
+
+    // converts coordinates into readable address
+    function reverseGeocode(latLng, cb) {
+      geocoder.geocode({ location: latLng }, (r, s) => {
+        if (s === "OK" && r[0]) cb(r[0].formatted_address);
+        else cb(`${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}`);
+      });
+    }
+
+    // attaches Google Places autocomplete to inputs
+    function wireAC(input, kind) {
+      const ac = new google.maps.places.Autocomplete(input);
+      ac.bindTo("bounds", map);
+      ac.addListener("place_changed", () => {
+        const p = ac.getPlace();
+        if (!p.geometry) return;
+        const pos = { lat: p.geometry.location.lat(), lng: p.geometry.location.lng() };
+        input.value = p.formatted_address || p.name;
+        setMarker(kind, pos);
+        if (kind === "pickup") setArmed("dropoff");
+        updateFooter();
+      });
+      input.onfocus = () => setArmed(kind);
+    }
+
+    // initializes map, markers, autocomplete, and click behavior
+    window.initMap = () => {
+      const toronto = { lat: 43.6532, lng: -79.3832 };
+      map = new google.maps.Map(document.getElementById("map"), { center: toronto, zoom: 12 });
+      geocoder = new google.maps.Geocoder();
+
+      wireAC(pickupInput, "pickup");
+      wireAC(dropoffInput, "dropoff");
+
+      // clicking map sets pickup or dropoff depending on armed state
+      map.addListener("click", (e) => {
+        const pos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+        reverseGeocode(pos, (addr) => {
+          if (armed === "pickup") pickupInput.value = addr;
+          else dropoffInput.value = addr;
+          setMarker(armed, pos);
+          if (armed === "pickup") setArmed("dropoff");
+          updateFooter();
+        });
+      });
+
+      updateFooter();
+    };
+
+    // handles service level selection
+    document.getElementById("serviceToggle").onclick = (e) => {
+      const btn = e.target.closest(".service-btn");
+      if (!btn) return;
+      service = btn.dataset.service;
+      document.querySelectorAll(".service-btn").forEach(b => b.classList.toggle("selected", b===btn));
+      updateFooter();
+    };
+
+    // demo submit button behavior
+    document.getElementById("seePricesBtn").onclick = () => {
+      alert("UI demo only");
+    };
+
+  </script>
+
+  <!-- ⚠️ Replace with your own API key -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=API_PLACEHOLDER&libraries=places&callback=initMap"
+    async defer>
+  </script>
+
+</body>
+</html>
